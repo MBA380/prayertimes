@@ -1,0 +1,81 @@
+#!/bin/bash
+
+DATE=$(date +%d-%m-%Y)
+LAT=$1 #-6.2088
+LON=$2 #106.8456
+METHOD=2
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+JSON_FILE="prayer_times.json"
+
+# Function to fetch data
+URL="https://api.aladhan.com/v1/timings/${DATE}?latitude=${LAT}&longitude=${LON}&method=${METHOD}"
+fetch_data() {
+    notify-send "requesting data" "$URL"
+    curl -s "$URL" | jq '.' > "$SCRIPT_DIR/$JSON_FILE"
+}
+
+# Check if JSON exists and is for today
+if [ -f "$SCRIPT_DIR/$JSON_FILE" ]; then
+    STORED_DATE=$(jq -r '.data.date.readable' "$SCRIPT_DIR/$JSON_FILE" 2>/dev/null)
+    # notify-send "sip ada json file" "$URL"
+    if [ "$STORED_DATE" != "$(date +"%d %b %Y")" ]; then
+        fetch_data
+    fi
+else
+    notify-send "waduh tidak ada json file"
+    fetch_data
+fi
+
+# Read timings from JSON
+TIMINGS=$(jq -r '.data.timings' "$SCRIPT_DIR/$JSON_FILE")
+if [ -z "$TIMINGS" ] || [ "$TIMINGS" == "null" ]; then
+    echo "Error fetching prayer times"
+    exit 1
+fi
+
+FAJR=$(echo "$TIMINGS" | jq -r '.Fajr')
+DHUHR=$(echo "$TIMINGS" | jq -r '.Dhuhr')
+ASR=$(echo "$TIMINGS" | jq -r '.Asr')
+MAGHRIB=$(echo "$TIMINGS" | jq -r '.Maghrib')
+ISHA=$(echo "$TIMINGS" | jq -r '.Isha')
+NOW=$(date +%H:%M)
+
+# Fungsi untuk mengubah HH:MM ke total menit
+to_minutes() {
+    echo "$1" | awk -F: '{ print ($1 * 60) + $2 }'
+}
+
+NOW_MIN=$(to_minutes "$NOW")
+
+# Tentukan Shalat Sekarang dan Shalat Berikutnya
+if [[ "$NOW" < "$FAJR" ]]; then
+    CURR_NAME="Isha"; CURR_TIME="$ISHA"; NEXT_NAME="Fajr"; NEXT_TIME="$FAJR"
+elif [[ "$NOW" < "$DHUHR" ]]; then
+    CURR_NAME="Fajr"; CURR_TIME="$FAJR"; NEXT_NAME="Dhuhr"; NEXT_TIME="$DHUHR"
+elif [[ "$NOW" < "$ASR" ]]; then
+    CURR_NAME="Dhuhr"; CURR_TIME="$DHUHR"; NEXT_NAME="Asr"; NEXT_TIME="$ASR"
+elif [[ "$NOW" < "$MAGHRIB" ]]; then
+    CURR_NAME="Asr"; CURR_TIME="$ASR"; NEXT_NAME="Maghrib"; NEXT_TIME="$MAGHRIB"
+elif [[ "$NOW" < "$ISHA" ]]; then
+    CURR_NAME="Maghrib"; CURR_TIME="$MAGHRIB"; NEXT_NAME="Isha"; NEXT_TIME="$ISHA"
+else
+    CURR_NAME="Isha"; CURR_TIME="$ISHA"; NEXT_NAME="Fajr"; NEXT_TIME="$FAJR"
+fi
+
+# Hitung selisih antara NOW dengan waktu shalat yang sedang berjalan (CURR_TIME)
+CURR_MIN=$(to_minutes "$CURR_TIME")
+SELISIH=$(( NOW_MIN - CURR_MIN ))
+
+# Koreksi jika menyeberang hari (misal: NOW 00:10, Isha kemarin 19:20)
+if [ $SELISIH -lt 0 ]; then
+    SELISIH=$(( SELISIH + 1440 ))
+fi
+
+# Logika Tampilan: Jika selisih masih dalam 30 menit
+if [ $SELISIH -le 30 ]; then
+    RESULT="Current: $CURR_NAME $CURR_TIME - "
+fi
+
+RESULT+="Next: $NEXT_NAME $NEXT_TIME"
+
+echo "$RESULT"
