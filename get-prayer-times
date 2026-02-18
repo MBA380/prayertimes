@@ -4,6 +4,7 @@ TO_DATE=$(date +%d-%m-%Y -d "$DATE + 30 day")
 DATE=$(date +%d-%m-%Y)
 LAT=$1 #-6.2088
 LON=$2 #106.8456
+refresh=$3 #refresh interval
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JSON_FILE="prayer_times_monthly.json"
 STORED_INDEX=null

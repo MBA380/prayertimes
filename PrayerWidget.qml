@@ -18,16 +18,24 @@ PluginComponent {
     property string isha: ""
     property string dateHijr: ""
     property string dateGreg: ""
-    // property int refreshInterval: root.pluginData.refreshInterval * 1000 || 300000 // in seconds
-    // property int refreshInterval: Number(root.pluginData.refreshInterval) * 60000 || 300000 // in minutes
-    property int refreshInterval: (Number(root.pluginData.refreshInterval) || 5) * 60000 // in minutes
-    property string lat: root.pluginData.lat || "-6.2088"
-    property string lon: root.pluginData.lon || "106.8456"
+    property bool pluginDataLoaded: false
+    property int refreshInterval: 5 * 60000 // default in minutes
+    property string lat: "-6.2088" // default Jakarta
+    property string lon: "106.8456" // default Jakarta
     property string scriptPath: Qt.resolvedUrl("get-prayer-times").toString().replace("file://", "")
+
+    onPluginDataChanged: {
+        root.refreshInterval = (Number(root.pluginData.refreshInterval) || 5) * 60000
+        root.lat = root.pluginData.lat || "-6.2088"
+        root.lon = root.pluginData.lon || "106.8456"
+        root.pluginDataLoaded = true
+        // Run process immediately when pluginData is loaded
+        prayerProcess.running = true;
+    }
 
     Process {
         id: prayerProcess
-        command: ["bash", root.scriptPath, root.lat, root.lon]
+        command: ["bash", root.scriptPath, root.lat, root.lon, root.refreshInterval]
         running: false
 
         stdout: SplitParser {
@@ -54,19 +62,10 @@ PluginComponent {
     }
 
     Timer {
-        interval: 10
-        running: true
-        repeat: false
-        onTriggered: {
-            prayerProcess.running = true;
-        }
-    }
-
-    Timer {
         interval: root.refreshInterval
-        running: true
+        running: root.pluginDataLoaded
         repeat: true
-        triggeredOnStart: true
+        triggeredOnStart: false
         onTriggered: {
             prayerProcess.running = true;
         }

@@ -5,7 +5,7 @@ import qs.Modules.Plugins
 
 PluginSettings {
     id: root
-    pluginId: "prayerTimesPlugin"
+    pluginId: "prayerTimes"
 
     StyledText {
         width: parent.width
@@ -26,23 +26,19 @@ PluginSettings {
     // SliderSetting {
     //     settingKey: "refreshInterval"
     //     label: "Refresh Interval"
-    //     description: "How often to update prayer times (in seconds)"
-    //     defaultValue: 300
-    //     minimum: 60
-    //     maximum: 3600
-    //     unit: "s"
+    //     description: "How often to update prayer times (in minutes)"
+    //     defaultValue: 5
+    //     minimum: 1
+    //     maximum: 60
+    //     unit: "min"
     //     leftIcon: "schedule"
     // }
 
-    SliderSetting {
+    StringSetting {
         settingKey: "refreshInterval"
-        label: "Refresh Interval"
+        label: "Refresh Interval (float)"
         description: "How often to update prayer times (in minutes)"
-        defaultValue: 5
-        minimum: 1
-        maximum: 60
-        unit: "min"
-        leftIcon: "schedule"
+        defaultValue: "5"
     }
 
     StringSetting {
