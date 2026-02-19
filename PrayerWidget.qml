@@ -22,23 +22,26 @@ PluginComponent {
     property int refreshInterval: 5 * 60000 // default in minutes
     property string lat: "-6.2088" // default Jakarta
     property string lon: "106.8456" // default Jakarta
+    property string method: ""     // Calculation method (empty = API auto-detects by location)
 
     // In-memory cache:
     // Stores the API response for today so we only hit the network once per day.
     // On each refresh tick we just re-run processPrayerData() against this cache.
     property var cachedTimings: null     // The `data` object from the Aladhan /v1/timings response
     property string cachedDate: ""       // The date (dd-MM-yyyy) the cache was fetched for
+    property string cachedMethod: ""     // The method the cache was fetched with (invalidate on change)
     property bool fetching: false        // Guard flag — prevents overlapping concurrent HTTP requests
     property int retryCount: 0           // Tracks consecutive 429 failures for exponential backoff
 
     // Settings handler:
-    // Called whenever plugin settings change (refresh interval, lat, lon).
+    // Called whenever plugin settings change (refresh interval, lat, lon, method).
     // Can fire multiple times rapidly on startup as each setting loads,
     // so we funnel through a debounce timer instead of fetching directly.
     onPluginDataChanged: {
         root.refreshInterval = (Number(root.pluginData.refreshInterval) || 5) * 60000
         root.lat = root.pluginData.lat || "-6.2088"
         root.lon = root.pluginData.lon || "106.8456"
+        root.method = root.pluginData.method || ""
         root.pluginDataLoaded = true
         debounceTimer.restart()  // restart (not start) to collapse multiple rapid signals
     }
@@ -83,14 +86,14 @@ PluginComponent {
     // Cache-or-fetch decision:
     // Central routing function called by both the debounce and refresh timers.
     // If we already have today's data cached it just reprocess it (free, no network).
-    // If the date changed or cache is empty then it fetches fresh data from the API.
+    // If the date changed, method changed, or cache is empty then it fetches fresh data from the API.
     function fetchOrProcess() {
         var today = Qt.formatDate(new Date(), "dd-MM-yyyy")
-        if (root.cachedDate === today && root.cachedTimings) {
+        if (root.cachedDate === today && root.cachedMethod === root.method && root.cachedTimings) {
             // Cache hit — reprocess to update current/next prayer based on new time-of-day
             processPrayerData(root.cachedTimings)
         } else {
-            // Cache miss — date changed or first run, need fresh data from API
+            // Cache miss — date or method changed, or first run; need fresh data from API
             fetchPrayerTimes()
         }
     }
@@ -105,7 +108,11 @@ PluginComponent {
 
         // Call Aladhan API with no date param — it returns today's times automatically.
         // This is simpler and avoids date formatting issues vs the old /calendar/from/to endpoint.
+        // Append &method=X only if a specific calculation method is selected in settings.
         var url = "https://api.aladhan.com/v1/timings?latitude=" + root.lat + "&longitude=" + root.lon
+        if (root.method !== "") {
+            url += "&method=" + root.method
+        }
         var xhr = new XMLHttpRequest()
         xhr.onreadystatechange = function() {
             if (xhr.readyState === XMLHttpRequest.DONE) {
@@ -117,9 +124,10 @@ PluginComponent {
                     try {
                         var json = JSON.parse(xhr.responseText)
                         if (json.code === 200 && json.data) {
-                            // Cache the response and stamp it with today's date
+                            // Cache the response, stamp with today's date and current method
                             root.cachedTimings = json.data
                             root.cachedDate = Qt.formatDate(new Date(), "dd-MM-yyyy")
+                            root.cachedMethod = root.method
                             processPrayerData(json.data)
                         } else {
                             root.prayerInfo = "API error: " + (json.status || "Unknown")
